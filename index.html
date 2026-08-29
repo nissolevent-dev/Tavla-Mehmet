@@ -626,6 +626,7 @@ function getPairCell(t, name1, name2){
   return { aName, bName, p: (t.game.pairs[aName]||{})[bName] };
 }
 function callableTargets(t, name){
+  // blockedCaller !== name: bu tur içinde aynı kişi aynı hedefe tekrar çekemez
   const side = sideOf(t, name);
   const g = t.game;
   const targets = [];
@@ -2067,6 +2068,7 @@ document.getElementById("confirmVidoBtn").addEventListener("click", ()=>{
           p.closed = true;
           p.closedLoser = targetName;
           p.closedAtCount = oldCount;
+          p.blockedCaller = caller;
         }
         g.vidoLog.push({ caller, opponent: targetName, from: oldCount, saw });
       });
@@ -2090,6 +2092,8 @@ document.getElementById("confirmVidoBtn").addEventListener("click", ()=>{
       if (uafBtn) uafBtn.style.display = "block";
     } else {
       fbSet(`${tablesPath()}/${currentTableId}/game`, g);
+      // Local state'i hemen güncelle - Firebase callback'i beklemeden blockedCaller korunsun
+      if (STATE.tables[currentTableId]) STATE.tables[currentTableId].game = g;
     }
     // Vido geri al butonu — bir önceki game state'i sakla
     document.getElementById("undoVidoBtn").style.display = "inline-block";
@@ -2258,11 +2262,11 @@ function finishHand(tableId, winnerSide, g, isMars){
     const vidoLog = g.vidoLog || [];
     // Kazanan oturan herhangi bir vidoyu görmemişse masadan kalkar.
     // vidoLog yerine pairs'e bak — daha güvenilir.
-    // pairs[caller][opponent].closedLoser === seatedWinner ise görmemiş demektir.
-    const winnerMissedVido = Object.values(g.pairs||{}).some(oppMap=>
-      Object.values(oppMap||{}).some(p=> p.closed && p.closedLoser === seatedWinner)
-    );
-    if (winnerMissedVido){
+    // Kural: Kazanan oturan, karşı tarafın OTURANININ vidasını görmemişse masadan kalkar.
+    // Ortakların vidasını görmemesi masadan kalkmayı gerektirmez.
+    const pairCell = (g.pairs[t.seated.A]||{})[t.seated.B];
+    const winnerMissedLoserSeated = pairCell && pairCell.closed && pairCell.closedLoser === seatedWinner;
+    if (winnerMissedLoserSeated){
       rotationWinnerSide = winnerSide === "A" ? "B" : "A";
     }
     const next = t.format === "2v2"
@@ -2323,6 +2327,11 @@ document.getElementById("undoFinishedHandBtn").addEventListener("click", ()=>{
   const uvBtnR = document.getElementById("undoVidoBtn");
   if (uvBtnR) uvBtnR.style.display = vidoStack.length ? "inline-block" : "none";
   document.getElementById("undoFinishedHandBtn").style.display = "none";
+  // Vido ekranına dön
+  selectedVidoCallers = [];
+  selectedVidoSeers = {};
+  goScreen("s5");
+  renderVidoCallersAndSeers();
 });
 
 document.getElementById("undoAutoFinishBtn").addEventListener("click", ()=>{
@@ -2350,6 +2359,11 @@ document.getElementById("undoAutoFinishBtn").addEventListener("click", ()=>{
   const uvBtnA = document.getElementById("undoVidoBtn");
   if (uvBtnA) uvBtnA.style.display = vidoStack.length ? "inline-block" : "none";
   document.getElementById("undoAutoFinishBtn").style.display = "none";
+  // Vido ekranına dön
+  selectedVidoCallers = [];
+  selectedVidoSeers = {};
+  goScreen("s5");
+  renderVidoCallersAndSeers();
 });
 
 document.getElementById("nextHandBtn").addEventListener("click", ()=>{
@@ -2400,6 +2414,10 @@ document.getElementById("undoHandBtn").addEventListener("click", ()=>{
     autoVidoNextHand: !!snap.autoVidoNextHand,
     previousSnapshot: null,
   });
+  // vidoStack'i restore et ve butonu göster
+  try { vidoStack = snap.vidoStack ? JSON.parse(snap.vidoStack) : []; } catch(e){ vidoStack = []; }
+  const uvBtnH = document.getElementById("undoVidoBtn");
+  if (uvBtnH) uvBtnH.style.display = vidoStack.length ? "inline-block" : "none";
 });
 
 /* ===================== SCREEN 6: TOTALS ===================== */
