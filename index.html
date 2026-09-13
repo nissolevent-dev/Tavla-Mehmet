@@ -536,8 +536,31 @@
     <div class="small-note" style="margin-bottom:18px;">Bu oturumda otomatik vido nasıl olsun?</div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button id="vido3ElBtn" class="btn-main" style="font-size:14px;padding:12px;">🎲 3 elde bir otomatik vido</button>
-      <button id="vidoHerElBtn" class="btn-soft btn-block" style="font-size:14px;padding:12px;">🎲 Her el vido sorulsun</button>
-      <button id="vidoSizBtn" class="btn-ghost" style="font-size:14px;padding:12px;">Otomatik vidosuz</button>
+      <button id="vidoHerElBtn" class="btn-main" style="font-size:14px;padding:12px;">🎲 Her el vido sorulsun</button>
+      <button id="vidoSizBtn" class="btn-main" style="font-size:14px;padding:12px;">Otomatik vidosuz</button>
+    </div>
+  </div>
+</div>
+
+<!-- OTOMATİK VİDO SORMA MODALI (herel modu) -->
+<div id="autoVidoOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:16px;padding:22px 20px;max-width:300px;width:100%;">
+    <h2 style="margin:0 0 8px;font-size:14px;color:var(--gold-dark);text-transform:uppercase;font-weight:700;letter-spacing:.5px;">🎲 Otomatik Vido</h2>
+    <div id="autoVidoStep1">
+      <div class="small-note" style="margin-bottom:16px;">Bu elde başlangıçta otomatik vido var mı?</div>
+      <div class="row">
+        <button class="btn-soft" id="autoVidoNo">Yok — Normal Başlat</button>
+        <button class="btn-main" id="autoVidoYes" style="margin-top:0;">Var</button>
+      </div>
+    </div>
+    <div id="autoVidoStep2" style="display:none;">
+      <div class="small-note" style="margin-bottom:4px;">Kaç otomatik vido var?</div>
+      <div class="small-note" style="margin-bottom:14px;color:var(--gold-dark);font-weight:700;" id="autoVidoPreview"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;" id="autoVidoKeypad"></div>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn-soft" id="autoVidoBack">← Geri</button>
+        <button class="btn-main" id="autoVidoConfirm" style="margin-top:0;">Başlat</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1685,6 +1708,74 @@ function seat2v2FromRotation(king, fullOrder){
 
 let pendingFormat = null; // "1v3" veya "2v2"
 
+function openAutoVidoModal(onConfirm, defaultDigit){
+  autoVidoDigit = defaultDigit || 0;
+  autoVidoCallback = onConfirm || null;
+  if (defaultDigit){
+    document.getElementById("autoVidoStep1").style.display = "none";
+    document.getElementById("autoVidoStep2").style.display = "block";
+    buildAutoVidoKeypad();
+    renderAutoVidoPreview();
+  } else {
+    document.getElementById("autoVidoStep1").style.display = "block";
+    document.getElementById("autoVidoStep2").style.display = "none";
+  }
+  document.getElementById("autoVidoOverlay").style.display = "flex";
+}
+function closeAutoVidoModal(){
+  document.getElementById("autoVidoOverlay").style.display = "none";
+}
+function renderAutoVidoPreview(){
+  const count = autoVidoDigit;
+  const multiplier = Math.pow(2, count);
+  document.getElementById("autoVidoPreview").textContent =
+    count === 0 ? "0 vido → normal başlar (x1)" : `${count} vido → ${multiplier}x başlar`;
+}
+function buildAutoVidoKeypad(){
+  const kp = document.getElementById("autoVidoKeypad");
+  if (kp.childElementCount) return;
+  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+  keys.forEach(k=>{
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pw-key" + (k==="" ? " pw-key-empty" : "");
+    btn.textContent = k;
+    if (k !== ""){
+      btn.addEventListener("click", ()=>{
+        if (k === "⌫"){ autoVidoDigit = 0; }
+        else { const n = parseInt(k); if (n >= 1 && n <= 9) autoVidoDigit = n; }
+        renderAutoVidoPreview();
+      });
+    }
+    kp.appendChild(btn);
+  });
+}
+document.getElementById("autoVidoNo").addEventListener("click", ()=>{
+  const cb = autoVidoCallback;
+  closeAutoVidoModal();
+  if (cb) cb(0);
+  else launchDiceGame(0);
+});
+document.getElementById("autoVidoYes").addEventListener("click", ()=>{
+  autoVidoDigit = 0;
+  document.getElementById("autoVidoStep1").style.display = "none";
+  document.getElementById("autoVidoStep2").style.display = "block";
+  buildAutoVidoKeypad();
+  renderAutoVidoPreview();
+});
+document.getElementById("autoVidoBack").addEventListener("click", ()=>{
+  document.getElementById("autoVidoStep1").style.display = "block";
+  document.getElementById("autoVidoStep2").style.display = "none";
+});
+document.getElementById("autoVidoConfirm").addEventListener("click", ()=>{
+  if (autoVidoDigit < 1){ alert("En az 1 vido girin."); return; }
+  const count = autoVidoDigit;
+  const cb = autoVidoCallback;
+  closeAutoVidoModal();
+  if (cb) cb(count);
+  else launchDiceGame(count);
+});
+
 function openVidoTypeModal(onSelect){
   document.getElementById("vidoTypeModalOverlay").style.display = "flex";
   document.getElementById("vido3ElBtn").onclick = ()=>{
@@ -2399,16 +2490,25 @@ document.getElementById("undoAutoFinishBtn").addEventListener("click", ()=>{
 document.getElementById("nextHandBtn").addEventListener("click", ()=>{
   try{
     const t = STATE.tables[currentTableId];
-    const autoVidoCount = (t && shouldAutoVido(t)) ? 1 : 0;
-    if (autoVidoCount > 0){
-      document.getElementById("autoVidoModal").style.display = "flex";
-      document.getElementById("autoVidoModalOk").onclick = ()=>{
-        document.getElementById("autoVidoModal").style.display = "none";
-        try{ startGameForTable(currentTableId, autoVidoCount); }
+    const vidoMode = t ? (t.vidoMode || "3el") : "3el";
+    if (vidoMode === "herel"){
+      // Her el vido var mı diye sor
+      openAutoVidoModal((count)=>{
+        try{ startGameForTable(currentTableId, count); }
         catch(e){ console.error(e); alert("Yeni el başlatılırken bir hata oluştu: " + e.message); }
-      };
+      });
     } else {
-      startGameForTable(currentTableId, 0);
+      const autoVidoCount = (t && shouldAutoVido(t)) ? 1 : 0;
+      if (autoVidoCount > 0){
+        document.getElementById("autoVidoModal").style.display = "flex";
+        document.getElementById("autoVidoModalOk").onclick = ()=>{
+          document.getElementById("autoVidoModal").style.display = "none";
+          try{ startGameForTable(currentTableId, autoVidoCount); }
+          catch(e){ console.error(e); alert("Yeni el başlatılırken bir hata oluştu: " + e.message); }
+        };
+      } else {
+        startGameForTable(currentTableId, 0);
+      }
     }
   } catch(e){
     console.error(e);
