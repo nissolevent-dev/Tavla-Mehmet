@@ -1810,6 +1810,18 @@ function launchDiceGame(autoVidoCount, vidoType){
   const setup = fmt === "2v2"
     ? rotationFromRanking_2v2(dicePick.ranking)
     : rotationFromRanking(dicePick.ranking);
+
+  if (vidoType === "herel"){
+    // İlk el için de vido sor
+    openAutoVidoModal((count)=>{
+      _doLaunchDiceGame(count, vidoType, fmt, setup);
+    });
+    return;
+  }
+  _doLaunchDiceGame(autoVidoCount, vidoType, fmt, setup);
+}
+
+function _doLaunchDiceGame(autoVidoCount, vidoType, fmt, setup){
   const game = buildInitialGame(setup.seated, setup.partners);
   if (autoVidoCount > 0){
     Object.values(game.pairs).forEach(oppMap=>{
